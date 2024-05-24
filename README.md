@@ -1,3 +1,5 @@
+**Update (24-05-2024):** As I am unable to maintain this repo, I am planning to archive this. If you are reading this, I already **deleted** the pip package `edhsmm`. Thank you for your understanding and showing interest with this project!
+
 **Warning:** I made this repo when I was an undergrad, but was not even part of my undergrad project. Correctness of implementation not guaranteed, so use at your own risk.
 
 # edhsmm
@@ -23,11 +25,6 @@ The code style is inspired from [hmmlearn](https://github.com/hmmlearn/hmmlearn)
 - scipy >= 0.19
 
 #### Installation & Tutorial
-Via *PyPI*:
-```console
-pip install edhsmm
-```
-
 Via *source*:
 ```console
 pip install .
