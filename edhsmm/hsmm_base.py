@@ -19,7 +19,8 @@ class HSMM:
         self.n_durations = n_durations
         self.n_iter = n_iter
         self.tol = tol
-        self.random_state = random_state
+        self.rng = np.random.default_rng(random_state)
+        self.random_state = random_state   # for imported functions needing rng seed
         self.name = name
         self._print_name = ""
 
@@ -119,39 +120,35 @@ class HSMM:
     # _state_sample: generate observation for given state
     def _state_sample(self):
         """
-        arguments: (self, state, random_state=None)
+        arguments: (self, state, rng)
         return: np.ndarray of length equal to dimension of observation
         > generate sample from state
         """
         pass   # implemented in subclass
 
     # sample: generate random observation series
-    def sample(self, n_samples=5, left_censor=0, right_censor=1, random_state=None):
+    def sample(self, n_samples=5, left_censor=0, right_censor=1):
         self._init(None)   # see "note for programmers" in init() in GaussianHSMM
         self._check()
-        # setup random state
-        if random_state is None:
-            random_state = self.random_state
-        rnd_checked = np.random.default_rng(random_state)
         # adapted from hmmlearn 0.2.3 (see _BaseHMM.score function)
         pi_cdf = np.cumsum(self.pi)
         tmat_cdf = np.cumsum(self.tmat, axis=1)
         dur_cdf = np.cumsum(self._dur_probmat(), axis=1)
         # for first state
-        currstate = (pi_cdf > rnd_checked.random()).argmax()   # argmax() returns only the first occurrence
-        currdur = (dur_cdf[currstate] > rnd_checked.random()).argmax() + 1
+        currstate = (pi_cdf > self.rng.random()).argmax()   # argmax() returns only the first occurrence
+        currdur = (dur_cdf[currstate] > self.rng.random()).argmax() + 1
         if left_censor != 0:
-            currdur -= rnd_checked.integers(low=0, high=currdur)   # if with left censor, remove some of X
+            currdur -= self.rng.integers(low=0, high=currdur)   # if with left censor, remove some of X
         if right_censor == 0 and currdur > n_samples:
             print(f"SAMPLE{ self._print_name }: n_samples is too small to contain the first state duration.")
             return None
         state_sequence = [currstate] * currdur
-        X = [self._state_sample(currstate, rnd_checked) for i in range(currdur)]   # generate observation
+        X = [self._state_sample(currstate, self.rng) for i in range(currdur)]   # generate observation
         ctr_sample = currdur
         # for next state transitions
         while ctr_sample < n_samples:
-            currstate = (tmat_cdf[currstate] > rnd_checked.random()).argmax()
-            currdur = (dur_cdf[currstate] > rnd_checked.random()).argmax() + 1
+            currstate = (tmat_cdf[currstate] > self.rng.random()).argmax()
+            currdur = (dur_cdf[currstate] > self.rng.random()).argmax() + 1
             # test if now in the end of generating samples
             if ctr_sample + currdur > n_samples:
                 if right_censor != 0:
@@ -159,7 +156,7 @@ class HSMM:
                 else:
                     break   # else, do not include exceeding state duration
             state_sequence += [currstate] * currdur
-            X += [self._state_sample(currstate, rnd_checked) for i in range(currdur)]   # generate observation
+            X += [self._state_sample(currstate, self.rng) for i in range(currdur)]   # generate observation
             ctr_sample += currdur
         return ctr_sample, np.atleast_2d(X), np.array(state_sequence, dtype=int)
 
@@ -215,6 +212,7 @@ class HSMM:
         return state_sequence, state_logl
 
     # score: log-likelihood computation from observation series
+    # cite: Yu, 2.2.2, eq. (8), 2nd eq.
     def score(self, X, lengths=None, left_censor=0, right_censor=1):
         X = check_array(X)
         self._init(X)
@@ -259,6 +257,7 @@ class HSMM:
         self._init(X)
         self._check()
         # main computations
+        # cite: Yu, 2.3.1, "The re-estimation procedure"
         for itera in range(self.n_iter):
             score = 0
             pi_num = np.full(self.n_states, -np.inf)
@@ -273,14 +272,15 @@ class HSMM:
                 gamma = self._core_smoothed(beta, betastar, right_censor, eta, xi)
                 score += logsumexp(gamma[0, :])   # this is the output of score()
                 # preparation for reestimation / M-step
+                # cite: Yu, 2.3.1, numerators of i) to iv)
                 if eta.shape[0] != j - i + 1:
                     eta = eta[:j - i + 1]
                 xi[j - i] = tmat_num
                 eta[j - i] = dur_num
-                pi_num = logsumexp([pi_num, gamma[0]], axis=0)
                 tmat_num = logsumexp(xi, axis=0)
                 dur_num = logsumexp(eta, axis=0)
                 emission_var[i:j] = gamma
+                pi_num = logsumexp([pi_num, gamma[0]], axis=0)
             # check for loop break
             if itera > 0 and (score - old_score) < self.tol:
                 print(f"FIT{ self._print_name }: converged at loop { itera + 1 }.")
@@ -288,11 +288,15 @@ class HSMM:
             else:
                 old_score = score
             # reestimation / M-step
-            self.pi = np.exp(pi_num - logsumexp(pi_num))
+            # cite: Yu, 2.3.1, i)
             self.tmat = np.exp(tmat_num - logsumexp(tmat_num, axis=1)[None].T)
+            # cite: Yu, 2.3.1, ii)
             new_dur = np.exp(dur_num - logsumexp(dur_num, axis=1)[None].T)
-            self._dur_mstep(new_dur)   # new durations
-            self._emission_mstep(X, emission_var)   # new emissions
+            self._dur_mstep(new_dur)
+            # cite: Yu, 2.3.1, iii)
+            self._emission_mstep(X, emission_var)
+            # cite: Yu, 2.3.1, iv)
+            self.pi = np.exp(pi_num - logsumexp(pi_num))
             print(f"FIT{ self._print_name }: reestimation complete for loop { itera + 1 }.")
         # return fitted model for joblib
         return self
@@ -391,6 +395,5 @@ class GaussianHSMM(HSMM):
         dist = X - self.mean[:, None]
         self.covmat = ((dist * weight_normalized)[:, :, :, None] * dist[:, :, None]).sum(1)
 
-    def _state_sample(self, state, random_state=None):
-        rnd_checked = np.random.default_rng(random_state)
-        return rnd_checked.multivariate_normal(self.mean[state], self.covmat[state])
+    def _state_sample(self, state, rng):
+        return rng.multivariate_normal(self.mean[state], self.covmat[state])

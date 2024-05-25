@@ -22,8 +22,7 @@ class MultinomialHSMM(HSMM):
             else:
                 self.n_symbols = np.max(X) + 1
             # like in hmmlearn, whether with X or not, default self.emit would be random
-            rnd_checked = np.random.default_rng(self.random_state)
-            init_emit = rnd_checked.random((self.n_states, self.n_symbols))
+            init_emit = self.rng.random((self.n_states, self.n_symbols))
             # normalize probabilities, and make sure we don't divide by zero
             init_sum = init_emit.sum(1)
             zero_sums = (init_sum == 0)   # which rows are all zeros?
@@ -73,7 +72,6 @@ class MultinomialHSMM(HSMM):
         iverson = (X.T == np.arange(self.n_symbols)[:,None])   # iverson bracket
         self.emit = (weight_normalized[:,:,None] * iverson[:,None].T).sum(0)
 
-    def _state_sample(self, state, random_state=None):
+    def _state_sample(self, state, rng):
         emit_cdf = np.cumsum(self.emit[state, :])
-        rnd_checked = np.random.default_rng(random_state)
-        return [(emit_cdf > rnd_checked.random()).argmax()]   # shape of X must be (n_samples, 1)
+        return [(emit_cdf > rng.random()).argmax()]   # shape of X must be (n_samples, 1)

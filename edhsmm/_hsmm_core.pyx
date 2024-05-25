@@ -188,7 +188,7 @@ def _smoothed(int n_samples, int n_states, int n_durations,
                     else:
                         xi[t, i, j] = xi[t, i, j] + betastar[t + 1, j]
                 # gamma computation
-                # cite: Yu, 2.2.2, eq. (8)
+                # cite: Yu, 2.2.2, eq. (8), 1st eq.
                 # note: this is the slow "original" method. the paper provides a faster recursive
                 # method using xi (cite: Yu, 2.2.2, eq. (9)), but it requires subtraction and
                 # produced numerical inaccuracies from our initial tests.

@@ -54,7 +54,7 @@ pip install .
 ```
 Type `python3` to run Python CLI, and type `deactivate` to exit the environment.
 
-**Note**: Also run `pip install notebook matplotlib` to run the notebooks.
+**Note**: Also run `pip install jupyterlab matplotlib` and then `jupyter lab` to install requirements to run notebooks and to run them, respectively.
 
 For tutorial, see the [notebooks](notebooks). This also serves as some sort of "documentation".
 
